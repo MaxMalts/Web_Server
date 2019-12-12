@@ -77,12 +77,17 @@ SOCKET GetListenSock() {
 	return listenSock;
 }
 
-SOCKET AcceptConnection(SOCKET listenSock) {
+SOCKET AcceptConnection(SOCKET listenSock, sockaddr* clientAddr = NULL, int* addrLen = NULL) {
 	assert(listenSock != INVALID_SOCKET);
+
+	int sockaddrLen = sizeof(sockaddr);
+	if (addrLen == NULL) {
+		addrLen = &sockaddrLen;
+	}
 
 	SOCKET resSock = {};
 	while (1) {
-		resSock = accept(listenSock, NULL, NULL);
+		resSock = accept(listenSock, clientAddr, addrLen);
 		if (resSock == INVALID_SOCKET) {
 			if (WSAGetLastError() == WSAETIMEDOUT) {
 				fprintf(stderr, "Accepting connection timed out. Trying to reconnect...\n");
@@ -102,17 +107,17 @@ int ReceiveData(SOCKET clientSock, char* buf, int len) {
 	assert(buf != NULL);
 	assert(len > 0);
 
-	int err = recv(clientSock, buf, len, 0);
-	if (err == 0) {
+	int recvLen = recv(clientSock, buf, len, 0);
+	assert(recvLen < len);
+	if (recvLen == 0) {
 		fprintf(stderr, "Connection gracefully closed (while recv attemp)\n");
-		return 1;
 	}
-	else if (err == SOCKET_ERROR) {
+	else if (recvLen == SOCKET_ERROR) {
 		fprintf(stderr, "Error while receiving attemp: %d\n", WSAGetLastError());
-		return 1;
+		return -1;
 	}
 
-	return 0;
+	return recvLen;
 }
 
 int SendData(SOCKET clientSock, char* buf, int len) {
@@ -196,12 +201,16 @@ int InteractClient(SOCKET clientSock) {
 	assert(clientSock != INVALID_SOCKET);
 
 	char buf[1000] = "";
-	if (ReceiveData(clientSock, buf, sizeof(buf) - 1) == 1) {
+	printf("Receiving data...\n");
+	int bufLen = ReceiveData(clientSock, buf, sizeof(buf) - 1);
+	if (bufLen <= 0) {
 		return 1;
 	}
+	printf("Data received successfully:\n");
+	fwrite(buf, sizeof(char), bufLen, stdout);
 	
 	if (strncmp(buf, "GET ", 4) == 0) {
-		int bufLen = 0;
+		bufLen = 0;
 		if (strncmp(&buf[4], "/favicon.ico", 12) == 0) {
 			bufLen = CreateFaviconBuf((char*)"favicon.ico", buf, sizeof(buf) - 1);
 			if (bufLen == -1) {
@@ -215,9 +224,12 @@ int InteractClient(SOCKET clientSock) {
 			}
 		}
 
+		printf("\nSending data:\n");
+		fwrite(buf, sizeof(char), bufLen, stdout);
 		if (SendData(clientSock, buf, bufLen) == 1) {
 			return 1;
 		}
+		printf("\nData sent.\n");
 	}
 	else {
 		fprintf(stderr, "Didn't receive GET method\n");
@@ -227,28 +239,39 @@ int InteractClient(SOCKET clientSock) {
 }
 
 int StartServer() {
+	printf("Initializing...\n");
 	int err = Initialize();
 	if (err != 0) {
 		return 1;
 	}
+	printf("Initialized.\n\n");
 
+	printf("Creating listening socket...\n");
 	SOCKET listenSock = GetListenSock();
 	if (listenSock == INVALID_SOCKET) {
 		return 1;
 	}
+	printf("Listening socket successfully created.\n\n\n");
 
 	while (1) {
-		SOCKET clientSock = AcceptConnection(listenSock);
+		sockaddr_in clientAddr = {AF_INET, 0};
+		printf("Waiting for incoming connection...\n");
+		SOCKET clientSock = AcceptConnection(listenSock, (sockaddr*)&clientAddr);
 		if (clientSock == INVALID_SOCKET) {
 			return 1;
 		}
+		printf("Connected to %s.\n\n", inet_ntoa(clientAddr.sin_addr));
 
+		printf("Interacting with client:\n");
 		InteractClient(clientSock);
+		printf("Ended interaction.\n\n");
 
+		printf("Closing connection...\n");
 		if (closesocket(clientSock) == SOCKET_ERROR) {
 			fprintf(stderr, "closesocket() error: %d", WSAGetLastError());
 			return 1;
 		}
+		printf("Connection closed successfully.\n\n");
 	}
 }
 
