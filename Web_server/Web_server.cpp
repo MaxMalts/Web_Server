@@ -128,45 +128,68 @@ int SendData(SOCKET clientSock, char* buf, int len) {
 	return 0;
 }
 
-int CreateHtmlBuf(char* headFName, char* htmlFName, char* buf, int bufLen) {
-	assert(headFName != NULL);
+int CreateHtmlBuf(char* htmlFName, char* buf, int bufLen) {
 	assert(htmlFName != NULL);
 	assert(buf != NULL);
 	assert(bufLen > 0);
 
-	const int headFMaxSize = 300;
 	const int htmlFMaxSize = 1000;
-
-	FILE* headF = fopen(headFName, "rb");
-	if (headF == NULL) {
-		fprintf(stderr, "Open %s file error: %d (%s)\n", headFName, errno, strerror(errno));
-		return 1;
-	}
 
 	FILE* htmlF = fopen(htmlFName, "rb");
 	if (htmlF == NULL) {
 		fprintf(stderr, "Open %s file error: %d (%s)\n", htmlFName, errno, strerror(errno));
-		fclose(headF);
 		return 1;
 	}
 
-	char headBuf[headFMaxSize] = "";
-	int headLen = fread(headBuf, sizeof(char), headFMaxSize, headF);
-	fclose(headF);
+	char headBuf[] = "HTTP/1.1 200 OK\r\nContent-type: text/html; charset=utf-8";
 
 	char htmlBuf[htmlFMaxSize] = "";
 	int htmlLen = fread(htmlBuf, sizeof(char), htmlFMaxSize, htmlF);
+	assert(htmlLen < htmlFMaxSize);
 	fclose(htmlF);
 
-	if (headLen + htmlLen >= bufLen) {
-		fprintf(stderr, "Buffer length too small: header file length: %d, "
-			    "html file length: %d, buffer length: %d\n", headLen, htmlLen, bufLen);
+	if (sizeof(headBuf) + htmlLen >= bufLen) {
+		fprintf(stderr, "Buffer length too small: header length: %d, "
+			    "html file length: %d, buffer length: %d\n", sizeof(headBuf), htmlLen, bufLen);
 		return 1;
 	}
 
-	sprintf(buf, "%s\r\n\r\n%s", headBuf, htmlBuf);
+	sprintf(buf, "%s\r\n\r\n", headBuf);
+	memcpy(&buf[(sizeof(headBuf) - 1) + 4], htmlBuf, htmlLen);
 
-	return 0;
+	return (sizeof(headBuf) - 1) + 4 + htmlLen;
+}
+
+int CreateFaviconBuf(char* favicFName, char* buf, int bufLen) {
+	assert(favicFName != NULL);
+	assert(buf != NULL);
+	assert(bufLen > 0);
+
+	const int favicFMaxSize = 1000;
+
+	FILE* favicF = fopen(favicFName, "rb");
+	if (favicF == NULL) {
+		fprintf(stderr, "Open %s file error: %d (%s)\n", favicFName, errno, strerror(errno));
+		return -1;
+	}
+
+	char headBuf[] = "HTTP/1.1 200 OK\r\nContent-type: image/x-icon";
+
+	char favicBuf[favicFMaxSize] = "";
+	int favicLen = fread(favicBuf, sizeof(char), favicFMaxSize, favicF);
+	assert(favicLen < favicFMaxSize);
+	fclose(favicF);
+
+	if (sizeof(headBuf) + favicLen >= bufLen) {
+		fprintf(stderr, "Buffer length too small: header length: %d, "
+			"favicon file length: %d, buffer length: %d\n", sizeof(headBuf), favicLen, bufLen);
+		return -1;
+	}
+
+	sprintf(buf, "%s\r\n\r\n", headBuf);
+	memcpy(&buf[(sizeof(headBuf) - 1) + 4], favicBuf, favicLen);
+
+	return (sizeof(headBuf) - 1) + 4 + favicLen;
 }
 
 int InteractClient(SOCKET clientSock) {
@@ -178,10 +201,21 @@ int InteractClient(SOCKET clientSock) {
 	}
 	
 	if (strncmp(buf, "GET ", 4) == 0) {
-		if (CreateHtmlBuf((char*)"Head.txt", (char*)"Page.html", buf, sizeof(buf) - 1) == 1) {
-			return 1;
+		int bufLen = 0;
+		if (strncmp(&buf[4], "/favicon.ico", 12) == 0) {
+			bufLen = CreateFaviconBuf((char*)"favicon.ico", buf, sizeof(buf) - 1);
+			if (bufLen == -1) {
+				return 1;
+			}
 		}
-		if (SendData(clientSock, buf, strlen(buf) + 1) == 1) {
+		else {
+			bufLen = CreateHtmlBuf((char*)"Page.html", buf, sizeof(buf) - 1);
+			if (bufLen == -1) {
+				return 1;
+			}
+		}
+
+		if (SendData(clientSock, buf, bufLen) == 1) {
 			return 1;
 		}
 	}
