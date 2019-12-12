@@ -138,7 +138,7 @@ int CreateHtmlBuf(char* htmlFName, char* buf, int bufLen) {
 	assert(buf != NULL);
 	assert(bufLen > 0);
 
-	const int htmlFMaxSize = 1000;
+	const int htmlFMaxSize = 10000;
 
 	FILE* htmlF = fopen(htmlFName, "rb");
 	if (htmlF == NULL) {
@@ -200,7 +200,7 @@ int CreateFaviconBuf(char* favicFName, char* buf, int bufLen) {
 int InteractClient(SOCKET clientSock) {
 	assert(clientSock != INVALID_SOCKET);
 
-	char buf[1000] = "";
+	char buf[10000] = "";
 	printf("Receiving data...\n");
 	int bufLen = ReceiveData(clientSock, buf, sizeof(buf) - 1);
 	if (bufLen <= 0) {
