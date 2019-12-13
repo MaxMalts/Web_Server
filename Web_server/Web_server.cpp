@@ -6,6 +6,12 @@
 #include <winsock2.h>
 #pragma comment(lib, "Ws2_32.lib")
 
+#ifdef _DEBUG
+#define DEBUG_CODE(code) code
+#else
+#define DEBUG_CODE(code) 
+#endif
+
 int Initialize() {
 	WSADATA wsConf;
 	int err = WSAStartup(MAKEWORD(1, 1), &wsConf);
@@ -231,13 +237,13 @@ int InteractClient(SOCKET clientSock) {
 	const char const mainPage[] = "Page.html";
 
 	char buf[50000] = "";
-	printf("Receiving data...\n");
+	printf("\t\tReceiving data...\n");
 	int bufLen = ReceiveData(clientSock, buf, sizeof(buf) - 1);
 	if (bufLen <= 0) {
 		return 1;
 	}
-	printf("Data received successfully:\n");
-	fwrite(buf, sizeof(char), bufLen, stdout);
+	printf("\t\tData received successfully:\n");
+	DEBUG_CODE(fwrite(buf, sizeof(char), bufLen, stdout));
 	
 	if (strncmp(buf, "GET ", 4) == 0) {
 		bufLen = 0;
@@ -261,12 +267,12 @@ int InteractClient(SOCKET clientSock) {
 			return 1;
 		}
 
-		printf("\nSending data:\n");
-		fwrite(buf, sizeof(char), bufLen, stdout);
+		printf("\n\t\tSending data:\n");
+		DEBUG_CODE(fwrite(buf, sizeof(char), bufLen, stdout));
 		if (SendData(clientSock, buf, bufLen) == 1) {
 			return 1;
 		}
-		printf("\nData sent.\n");
+		printf("\n\t\tData sent.\n");
 	}
 	else {
 		fprintf(stderr, "(ERROR) Didn't receive GET method\n");
@@ -306,24 +312,24 @@ int StartServer() {
 
 	while (1) {
 		sockaddr_in clientAddr = {AF_INET, 0};
-		printf("Waiting for incoming connection...\n");
+		printf("\tWaiting for incoming connection...\n");
 		SOCKET clientSock = AcceptConnection(listenSock, (sockaddr*)&clientAddr);
 		if (clientSock == INVALID_SOCKET) {
 			closesocket(listenSock);
 			return 1;
 		}
-		printf("Connected to %s.\n\n", inet_ntoa(clientAddr.sin_addr));
+		printf("\tConnected to %s.\n\n", inet_ntoa(clientAddr.sin_addr));
 
-		printf("Interacting with client:\n");
+		printf("\tInteracting with client:\n");
 		InteractClient(clientSock);
-		printf("Ended interaction.\n\n");
+		printf("\tEnded interaction.\n\n");
 
-		printf("Closing connection...\n");
+		printf("\tClosing connection...\n");
 		if (EndConnection(clientSock) == SOCKET_ERROR) {
 			closesocket(listenSock);
 			return 1;
 		}
-		printf("Connection closed successfully.\n\n");
+		printf("\tConnection closed successfully.\n\n\n\n");
 	}
 }
 
