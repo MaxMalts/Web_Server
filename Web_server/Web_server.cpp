@@ -159,7 +159,7 @@ int DetContType(char* fName, char* contType) {
 		}
 	}
 	if (fNameLen > 4) {
-		if (strcmp(lastCh - 4, ".css") == 0) {
+		if (strcmp(lastCh - 3, ".css") == 0) {
 			strcpy(contType, "text/css; charset=utf-8");
 			return 0;
 		}
@@ -227,6 +227,8 @@ int InteractClient(SOCKET clientSock) {
 	assert(clientSock != INVALID_SOCKET);
 
 	const int fReqNameMaxSize = 300;
+	const char const siteFolder[] = "Site_data";
+	const char const mainPage[] = "Page.html";
 
 	char buf[50000] = "";
 	printf("Receiving data...\n");
@@ -243,14 +245,15 @@ int InteractClient(SOCKET clientSock) {
 
 		char fReqName[fReqNameMaxSize] = "";
 		if (buf[5] == ' ') {
-			strcpy(fReqName, "Page.html");
+			sprintf(fReqName, "%s/%s", siteFolder, mainPage);
 		}
 		else {
 			char* space = strchr(&buf[4], ' ');
 			int fReqNameSize = space - &buf[5];
 			assert(fReqNameSize > 0 && fReqNameSize < fReqNameMaxSize);
 
-			strncpy(fReqName, &buf[5], fReqNameSize);
+			sprintf(fReqName, "%s/", siteFolder);
+			strncpy(&fReqName[sizeof(siteFolder)], &buf[5], fReqNameSize);
 		}
 
 		bufLen = CreateSendBuf(fReqName, buf, sizeof(buf) - 1);
