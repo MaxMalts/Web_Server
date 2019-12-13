@@ -1,3 +1,5 @@
+﻿#pragma comment(linker, "/STACK:1048576")
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <assert.h>
@@ -8,7 +10,7 @@ int Initialize() {
 	WSADATA wsConf;
 	int err = WSAStartup(MAKEWORD(1, 1), &wsConf);
 	if (err != NO_ERROR) {
-		fprintf(stderr, "WSAStartup() error: %d\n", err);
+		fprintf(stderr, "(ERROR) WSAStartup() error: %d\n", err);
 		return 1;
 	}
 
@@ -18,12 +20,12 @@ int Initialize() {
 hostent* GetCurHost() {
 	char hostName[100] = "";
 if (gethostname(hostName, 100) == SOCKET_ERROR) {
-	fprintf(stderr, "gethostname() error: %d\n", WSAGetLastError());
+	fprintf(stderr, "(ERROR) gethostname() error: %d\n", WSAGetLastError());
 	return NULL;
 }
 hostent* host = gethostbyname(hostName);
 if (host == NULL) {
-	fprintf(stderr, "gethostbyname() error: %d\n", WSAGetLastError());
+	fprintf(stderr, "(ERROR) gethostbyname() error: %d\n", WSAGetLastError());
 	return NULL;
 }
 
@@ -45,17 +47,17 @@ SOCKET InitializeListenSock(sockaddr_in listenAddr) {
 	SOCKET listenSock = socket(AF_INET, SOCK_STREAM, 0);
 
 	if (listenSock == INVALID_SOCKET) {
-		fprintf(stderr, "Error when creating the listen socket: %d\n", WSAGetLastError());
+		fprintf(stderr, "(ERROR) Error when creating the listen socket: %d\n", WSAGetLastError());
 		return INVALID_SOCKET;
 	}
 
 	if (bind(listenSock, (sockaddr*)& listenAddr, sizeof(listenAddr)) == SOCKET_ERROR) {
-		fprintf(stderr, "Bind listen socket error: %d\n", WSAGetLastError());
+		fprintf(stderr, "(ERROR) Bind listen socket error: %d\n", WSAGetLastError());
 		return INVALID_SOCKET;
 	}
 
 	if (listen(listenSock, 1) == SOCKET_ERROR) {
-		fprintf(stderr, "Listen socket connection error: %d\n", WSAGetLastError());
+		fprintf(stderr, "(ERROR) Listen socket connection error: %d\n", WSAGetLastError());
 		return INVALID_SOCKET;
 	}
 
@@ -88,16 +90,16 @@ SOCKET AcceptConnection(SOCKET listenSock, sockaddr* clientAddr = NULL, int* add
 		resSock = accept(listenSock, clientAddr, addrLen);
 		if (resSock == INVALID_SOCKET) {
 			if (WSAGetLastError() == WSAETIMEDOUT) {
-				fprintf(stderr, "Accepting connection timed out. Trying to reconnect...\n");
+				fprintf(stderr, "(ERROR) Accepting connection timed out. Trying to reconnect...\n");
 				continue;
 			}
-			fprintf(stderr, "Accepting connection error: %d\n", WSAGetLastError());
+			fprintf(stderr, "(ERROR) Accepting connection error: %d\n", WSAGetLastError());
 			return INVALID_SOCKET;
 		}
 
 		DWORD timeout = 3 * 1000;
 		if (setsockopt(resSock, SOL_SOCKET, SO_RCVTIMEO, (char*)& timeout, sizeof(timeout)) == SOCKET_ERROR) {
-			fprintf(stderr, "Socket timeout configuration error: %d\n", WSAGetLastError());
+			fprintf(stderr, "(ERROR) Socket timeout configuration error: %d\n", WSAGetLastError());
 			return INVALID_SOCKET;
 		}
 		break;
@@ -114,16 +116,16 @@ int ReceiveData(SOCKET clientSock, char* buf, int len) {
 	int recvLen = recv(clientSock, buf, len, 0);
 	assert(recvLen < len);
 	if (recvLen == 0) {
-		fprintf(stderr, "Connection gracefully closed (while recv attemp)\n");
+		fprintf(stderr, "(ERROR) Connection gracefully closed (while recv attemp)\n");
 		return 0;
 	}
 	else if (recvLen == SOCKET_ERROR) {
 		if (WSAGetLastError() == WSAETIMEDOUT) {
-			fprintf(stderr, "Receive timed out\n");
+			fprintf(stderr, "(ERROR) Receive timed out\n");
 			return 0;
 		}
 		else {
-			fprintf(stderr, "Error while receiving attemp: %d\n", WSAGetLastError());
+			fprintf(stderr, "(ERROR) Error while receiving attemp: %d\n", WSAGetLastError());
 			return -1;
 		}
 	}
@@ -137,81 +139,96 @@ int SendData(SOCKET clientSock, char* buf, int len) {
 	assert(len > 0);
 
 	if (send(clientSock, buf, len, 0) == SOCKET_ERROR) {
-		fprintf(stderr, "Error while sending attemp: %d\n", WSAGetLastError());
+		fprintf(stderr, "(ERROR) Error while sending attemp: %d\n", WSAGetLastError());
 		return 1;
 	}
 
 	return 0;
 }
 
-int CreateHtmlBuf(char* htmlFName, char* buf, int bufLen) {
-	assert(htmlFName != NULL);
-	assert(buf != NULL);
-	assert(bufLen > 0);
+int DetContType(char* fName, char* contType) {
+	assert(fName != NULL);
+	assert(contType != NULL);
 
-	const int htmlFMaxSize = 5000;
-
-	FILE* htmlF = fopen(htmlFName, "rb");
-	if (htmlF == NULL) {
-		fprintf(stderr, "Open %s file error: %d (%s)\n", htmlFName, errno, strerror(errno));
-		return 1;
+	int fNameLen = strlen(fName);
+	char* lastCh = &fName[fNameLen - 1];
+	if (fNameLen > 5) {
+		if (strcmp(lastCh - 4, ".html") == 0) {
+			strcpy(contType, "text/html; charset=utf-8");
+			return 0;
+		}
+	}
+	if (fNameLen > 4) {
+		if (strcmp(lastCh - 4, ".css") == 0) {
+			strcpy(contType, "text/css; charset=utf-8");
+			return 0;
+		}
+		if (strcmp(lastCh - 3, ".ico") == 0) {
+			strcpy(contType, "image/x-icon");
+			return 0;
+		}
+		if (strcmp(lastCh - 3, ".jpg") == 0 || strcmp(lastCh - 3, ".jpegg") == 0) {
+			strcpy(contType, "image/jpeg");
+			return 0;
+		}
+		if (strcmp(lastCh - 3, ".png") == 0) {
+			strcpy(contType, "image/png");
+			return 0;
+		}
+		if (strcmp(lastCh - 4, ".gif") == 0) {
+			strcpy(contType, "text/gif");
+			return 0;
+		}
 	}
 
-	char headBuf[] = "HTTP/1.1 200 OK\r\nContent-type: text/html; charset=utf-8";
-
-	char htmlBuf[htmlFMaxSize] = "";
-	int htmlLen = fread(htmlBuf, sizeof(char), htmlFMaxSize, htmlF);
-	assert(htmlLen < htmlFMaxSize);
-	fclose(htmlF);
-
-	if (sizeof(headBuf) + htmlLen >= bufLen) {
-		fprintf(stderr, "Buffer length too small: header length: %d, "
-			    "html file length: %d, buffer length: %d\n", sizeof(headBuf), htmlLen, bufLen);
-		return 1;
-	}
-
-	sprintf(buf, "%s\r\n\r\n", headBuf);
-	memcpy(&buf[(sizeof(headBuf) - 1) + 4], htmlBuf, htmlLen);
-
-	return (sizeof(headBuf) - 1) + 4 + htmlLen;
+	return 1;
 }
 
-int CreateFaviconBuf(char* favicFName, char* buf, int bufLen) {
-	assert(favicFName != NULL);
+int CreateSendBuf(char* fSendName, char* buf, int bufLen) {
+	assert(fSendName != NULL);
 	assert(buf != NULL);
 	assert(bufLen > 0);
 
-	const int favicFMaxSize = 1000;
+	const int fBufMaxSize = 50000;
 
-	FILE* favicF = fopen(favicFName, "rb");
-	if (favicF == NULL) {
-		fprintf(stderr, "Open %s file error: %d (%s)\n", favicFName, errno, strerror(errno));
+	FILE* fSend = fopen(fSendName, "rb");
+	if (fSend == NULL) {
+		fprintf(stderr, "(ERROR) Open %s file error: %d (%s)\n", fSendName, errno, strerror(errno));
 		return -1;
 	}
 
-	char headBuf[] = "HTTP/1.1 200 OK\r\nContent-type: image/x-icon";
+	char contType[100] = "";
+	if (DetContType(fSendName, contType) == 1) {
+		fprintf(stderr, "(ERROR) Didn't determine content type of file %s\n", fSendName);
+		return -1;
+	}
 
-	char favicBuf[favicFMaxSize] = "";
-	int favicLen = fread(favicBuf, sizeof(char), favicFMaxSize, favicF);
-	assert(favicLen < favicFMaxSize);
-	fclose(favicF);
+	char headBuf[300] = "";
+	int headLen = sprintf(headBuf, "HTTP/1.1 200 OK\r\nContent-type: %s", contType);
 
-	if (sizeof(headBuf) + favicLen >= bufLen) {
-		fprintf(stderr, "Buffer length too small: header length: %d, "
-			"favicon file length: %d, buffer length: %d\n", sizeof(headBuf), favicLen, bufLen);
+	char fBuf[fBufMaxSize] = "";
+	int fBufLen = fread(fBuf, sizeof(char), fBufMaxSize, fSend);
+	assert(fBufLen < fBufMaxSize);
+	fclose(fSend);
+
+	if (headLen + fBufLen >= bufLen) {
+		fprintf(stderr, "(ERROR) Buffer length too small: header length: %d, "
+			    "file length: %d, buffer length: %d\n", headLen, fBufLen, bufLen);
 		return -1;
 	}
 
 	sprintf(buf, "%s\r\n\r\n", headBuf);
-	memcpy(&buf[(sizeof(headBuf) - 1) + 4], favicBuf, favicLen);
+	memcpy(&buf[headLen  + 4], fBuf, fBufLen);
 
-	return (sizeof(headBuf) - 1) + 4 + favicLen;
+	return headLen + 4 + fBufLen;
 }
 
 int InteractClient(SOCKET clientSock) {
 	assert(clientSock != INVALID_SOCKET);
 
-	char buf[5000] = "";
+	const int fReqNameMaxSize = 300;
+
+	char buf[50000] = "";
 	printf("Receiving data...\n");
 	int bufLen = ReceiveData(clientSock, buf, sizeof(buf) - 1);
 	if (bufLen <= 0) {
@@ -222,17 +239,23 @@ int InteractClient(SOCKET clientSock) {
 	
 	if (strncmp(buf, "GET ", 4) == 0) {
 		bufLen = 0;
-		if (strncmp(&buf[4], "/favicon.ico", 12) == 0) {
-			bufLen = CreateFaviconBuf((char*)"favicon.ico", buf, sizeof(buf) - 1);
-			if (bufLen == -1) {
-				return 1;
-			}
+		assert(buf[4] == '/');
+
+		char fReqName[fReqNameMaxSize] = "";
+		if (buf[5] == ' ') {
+			strcpy(fReqName, "Page.html");
 		}
 		else {
-			bufLen = CreateHtmlBuf((char*)"Page.html", buf, sizeof(buf) - 1);
-			if (bufLen == -1) {
-				return 1;
-			}
+			char* space = strchr(&buf[4], ' ');
+			int fReqNameSize = space - &buf[5];
+			assert(fReqNameSize > 0 && fReqNameSize < fReqNameMaxSize);
+
+			strncpy(fReqName, &buf[5], fReqNameSize);
+		}
+
+		bufLen = CreateSendBuf(fReqName, buf, sizeof(buf) - 1);
+		if (bufLen == -1) {
+			return 1;
 		}
 
 		printf("\nSending data:\n");
@@ -243,7 +266,7 @@ int InteractClient(SOCKET clientSock) {
 		printf("\nData sent.\n");
 	}
 	else {
-		fprintf(stderr, "Didn't receive GET method\n");
+		fprintf(stderr, "(ERROR) Didn't receive GET method\n");
 	}
 
 	return 0;
@@ -253,11 +276,11 @@ int EndConnection(SOCKET clientSock) {
 	assert(clientSock != INVALID_SOCKET);
 
 	if (shutdown(clientSock, SD_BOTH) == SOCKET_ERROR) {
-		fprintf(stderr, "shutdown() error: %d", WSAGetLastError());
+		fprintf(stderr, "(ERROR) shutdown() error: %d", WSAGetLastError());
 		return SOCKET_ERROR;
 	}
 	if (closesocket(clientSock) == SOCKET_ERROR) {
-		fprintf(stderr, "closesocket() error: %d", WSAGetLastError());
+		fprintf(stderr, "(ERROR) closesocket() error: %d", WSAGetLastError());
 		return SOCKET_ERROR;
 	}
 }
