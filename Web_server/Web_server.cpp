@@ -70,8 +70,6 @@ SOCKET GetListenSock() {
 
 	sockaddr_in listenAddr = GetListenAddr_in(host, 80);
 
-	//printf("%s", inet_ntoa(listenAddr.sin_addr));
-
 	SOCKET listenSock = InitializeListenSock(listenAddr);
 
 	return listenSock;
@@ -96,6 +94,12 @@ SOCKET AcceptConnection(SOCKET listenSock, sockaddr* clientAddr = NULL, int* add
 			fprintf(stderr, "Accepting connection error: %d\n", WSAGetLastError());
 			return INVALID_SOCKET;
 		}
+
+		DWORD timeout = 3 * 1000;
+		if (setsockopt(resSock, SOL_SOCKET, SO_RCVTIMEO, (char*)& timeout, sizeof(timeout)) == SOCKET_ERROR) {
+			fprintf(stderr, "Socket timeout configuration error: %d\n", WSAGetLastError());
+			return INVALID_SOCKET;
+		}
 		break;
 	}
 
@@ -111,10 +115,17 @@ int ReceiveData(SOCKET clientSock, char* buf, int len) {
 	assert(recvLen < len);
 	if (recvLen == 0) {
 		fprintf(stderr, "Connection gracefully closed (while recv attemp)\n");
+		return 0;
 	}
 	else if (recvLen == SOCKET_ERROR) {
-		fprintf(stderr, "Error while receiving attemp: %d\n", WSAGetLastError());
-		return -1;
+		if (WSAGetLastError() == WSAETIMEDOUT) {
+			fprintf(stderr, "Receive timed out\n");
+			return 0;
+		}
+		else {
+			fprintf(stderr, "Error while receiving attemp: %d\n", WSAGetLastError());
+			return -1;
+		}
 	}
 
 	return recvLen;
@@ -238,6 +249,19 @@ int InteractClient(SOCKET clientSock) {
 	return 0;
 }
 
+int EndConnection(SOCKET clientSock) {
+	assert(clientSock != INVALID_SOCKET);
+
+	if (shutdown(clientSock, SD_BOTH) == SOCKET_ERROR) {
+		fprintf(stderr, "shutdown() error: %d", WSAGetLastError());
+		return SOCKET_ERROR;
+	}
+	if (closesocket(clientSock) == SOCKET_ERROR) {
+		fprintf(stderr, "closesocket() error: %d", WSAGetLastError());
+		return SOCKET_ERROR;
+	}
+}
+
 int StartServer() {
 	printf("Initializing...\n");
 	int err = Initialize();
@@ -249,6 +273,7 @@ int StartServer() {
 	printf("Creating listening socket...\n");
 	SOCKET listenSock = GetListenSock();
 	if (listenSock == INVALID_SOCKET) {
+		closesocket(listenSock);
 		return 1;
 	}
 	printf("Listening socket successfully created.\n\n\n");
@@ -258,6 +283,7 @@ int StartServer() {
 		printf("Waiting for incoming connection...\n");
 		SOCKET clientSock = AcceptConnection(listenSock, (sockaddr*)&clientAddr);
 		if (clientSock == INVALID_SOCKET) {
+			closesocket(listenSock);
 			return 1;
 		}
 		printf("Connected to %s.\n\n", inet_ntoa(clientAddr.sin_addr));
@@ -267,8 +293,8 @@ int StartServer() {
 		printf("Ended interaction.\n\n");
 
 		printf("Closing connection...\n");
-		if (closesocket(clientSock) == SOCKET_ERROR) {
-			fprintf(stderr, "closesocket() error: %d", WSAGetLastError());
+		if (EndConnection(clientSock) == SOCKET_ERROR) {
+			closesocket(listenSock);
 			return 1;
 		}
 		printf("Connection closed successfully.\n\n");
@@ -277,8 +303,13 @@ int StartServer() {
 
 int main() {
 
-	int err = StartServer();
+	int err = 0;
+	while (1) {
+		err = StartServer();
+		if (err != 0) {
+			printf("Restarting...\n");
+		}
+	}
 
-	getchar();
 	return err;
 }
