@@ -182,10 +182,30 @@ int SendData(SOCKET clientSock, char* buf, int len) {
 	assert(buf != NULL);
 	assert(len > 0);
 
-	if (send(clientSock, buf, len, 0) == SOCKET_ERROR) {
+	const int chunkSize = 2 * 1024;
+
+	int NChunks = len / chunkSize + 1;
+	int i = 0;
+	char* cursor = buf;
+	while (len >= chunkSize) {
+		if (send(clientSock, cursor, chunkSize, 0) == SOCKET_ERROR) {
+			fprintf(stderr, "(ERROR) Error while sending attemp: %d\n", WSAGetLastError());
+			return 1;
+		}
+		len -= chunkSize;
+		cursor += chunkSize;
+
+		++i;
+		if (i % 300 == 0) {
+			printf("%.1f%% sent\n", (float)i / NChunks * 100);
+		}
+	}
+	if (send(clientSock, cursor, len, 0) == SOCKET_ERROR) {
 		fprintf(stderr, "(ERROR) Error while sending attemp: %d\n", WSAGetLastError());
 		return 1;
 	}
+	printf("100.0%% sent\n");
+
 
 	return 0;
 }
@@ -237,9 +257,9 @@ int CreateSendBuf(char* fSendName, char* buf, int bufLen) {
 			return -1;
 		}
 
-		headLen = sprintf(headBuf, "HTTP/1.1 200 OK\r\nContent-type: %s", contType);
-
 		long long fBufLen = FileSize(fSend);
+		headLen = sprintf(headBuf, "HTTP/1.1 200 OK\r\nContent-type: %s\r\nContent-length: %d", contType, fBufLen);
+
 		if (headLen + fBufLen + 4 >= bufLen) {
 			fprintf(stderr, "(ERROR) Buffer length too small: header length: %d, "
 				"file length: %d, buffer length: %d\n", headLen, fBufLen, bufLen);
