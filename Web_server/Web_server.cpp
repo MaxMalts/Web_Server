@@ -1,8 +1,9 @@
-﻿#pragma comment(linker, "/STACK:1048576")
+﻿#pragma comment(linker, "/STACK:1100000000")
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <assert.h>
+#include "Content_types.h"
 #include <winsock2.h>
 #pragma comment(lib, "Ws2_32.lib")
 
@@ -16,6 +17,9 @@
 struct server_properties {
 	char ipAddr[100] = "auto";
 	int port = 80;
+
+	char siteRootFolder[10000] = "Site-Root";
+	char homePage[10000] = "index.html";
 };
 
 
@@ -178,31 +182,13 @@ int DetContType(char* fName, char* contType) {
 
 	int fNameLen = strlen(fName);
 	char* lastCh = &fName[fNameLen - 1];
-	if (fNameLen > 5) {
-		if (strcmp(lastCh - 4, ".html") == 0) {
-			strcpy(contType, "text/html; charset=utf-8");
-			return 0;
-		}
-	}
-	if (fNameLen > 4) {
-		if (strcmp(lastCh - 3, ".css") == 0) {
-			strcpy(contType, "text/css; charset=utf-8");
-			return 0;
-		}
-		if (strcmp(lastCh - 3, ".ico") == 0) {
-			strcpy(contType, "image/x-icon");
-			return 0;
-		}
-		if (strcmp(lastCh - 3, ".jpg") == 0 || strcmp(lastCh - 3, ".jpegg") == 0) {
-			strcpy(contType, "image/jpeg");
-			return 0;
-		}
-		if (strcmp(lastCh - 3, ".png") == 0) {
-			strcpy(contType, "image/png");
-			return 0;
-		}
-		if (strcmp(lastCh - 4, ".gif") == 0) {
-			strcpy(contType, "text/gif");
+	for (int i = 0; i < content_matches.size; ++i) {
+		int curExtensionSize = strlen(content_matches.contents[i].fExtension);
+
+		if (fNameLen >= curExtensionSize &&
+			strcmp(lastCh - curExtensionSize + 1, content_matches.contents[i].fExtension) == 0) {
+
+			strcpy(contType, content_matches.contents[i].contentType);
 			return 0;
 		}
 	}
@@ -215,29 +201,32 @@ int CreateSendBuf(char* fSendName, char* buf, int bufLen) {
 	assert(buf != NULL);
 	assert(bufLen > 0);
 
-	const int fBufMaxSize = 50000;
+	const unsigned int fBufMaxSize = 500 * 1024 * 1024;
+
+	char headBuf[10000] = "";
+	int headLen = 0;
 
 	FILE* fSend = fopen(fSendName, "rb");
 	if (fSend == NULL) {
-		fprintf(stderr, "(ERROR) Open %s file error: %d (%s)\n", fSendName, errno, strerror(errno));
-		return -1;
+		headLen = sprintf(headBuf, "HTTP/1.1 404 Not Found");
+		fprintf(stderr, "(WARNING) Open %s file error: %d (%s)\n", fSendName, errno, strerror(errno));
 	}
+	else {
+		char contType[100] = "";
+		if (DetContType(fSendName, contType) == 1) {
+			fprintf(stderr, "(ERROR) Didn't determine content type of file %s\n", fSendName);
+			return -1;
+		}
 
-	char contType[100] = "";
-	if (DetContType(fSendName, contType) == 1) {
-		fprintf(stderr, "(ERROR) Didn't determine content type of file %s\n", fSendName);
-		return -1;
+		headLen = sprintf(headBuf, "HTTP/1.1 200 OK\r\nContent-type: %s", contType);
 	}
-
-	char headBuf[300] = "";
-	int headLen = sprintf(headBuf, "HTTP/1.1 200 OK\r\nContent-type: %s", contType);
 
 	char fBuf[fBufMaxSize] = "";
 	int fBufLen = fread(fBuf, sizeof(char), fBufMaxSize, fSend);
 	assert(fBufLen < fBufMaxSize);
 	fclose(fSend);
 
-	if (headLen + fBufLen >= bufLen) {
+	if (headLen + fBufLen + 4 >= bufLen) {
 		fprintf(stderr, "(ERROR) Buffer length too small: header length: %d, "
 			    "file length: %d, buffer length: %d\n", headLen, fBufLen, bufLen);
 		return -1;
@@ -249,14 +238,14 @@ int CreateSendBuf(char* fSendName, char* buf, int bufLen) {
 	return headLen + 4 + fBufLen;
 }
 
-int InteractClient(SOCKET clientSock) {
+int InteractClient(SOCKET clientSock, server_properties props) {
 	assert(clientSock != INVALID_SOCKET);
 
-	const int fReqNameMaxSize = 300;
+	const int fReqNameMaxSize = 10000;
 	const char const siteFolder[] = "Site_data";
 	const char const mainPage[] = "Page.html";
 
-	char buf[50000] = "";
+	char buf[500 * 1024 * 1024] = "";
 	printf("\t\tReceiving data...\n");
 	int bufLen = ReceiveData(clientSock, buf, sizeof(buf) - 1);
 	if (bufLen <= 0) {
@@ -271,15 +260,15 @@ int InteractClient(SOCKET clientSock) {
 
 		char fReqName[fReqNameMaxSize] = "";
 		if (buf[5] == ' ') {
-			sprintf(fReqName, "%s/%s", siteFolder, mainPage);
+			sprintf(fReqName, "%s/%s", props.siteRootFolder, mainPage);
 		}
 		else {
 			char* space = strchr(&buf[4], ' ');
 			int fReqNameSize = space - &buf[5];
 			assert(fReqNameSize > 0 && fReqNameSize < fReqNameMaxSize);
 
-			sprintf(fReqName, "%s/", siteFolder);
-			strncpy(&fReqName[sizeof(siteFolder)], &buf[5], fReqNameSize);
+			sprintf(fReqName, "%s/", props.siteRootFolder);
+			strncpy(&fReqName[strlen(props.siteRootFolder) + 1], &buf[5], fReqNameSize);
 		}
 
 		bufLen = CreateSendBuf(fReqName, buf, sizeof(buf) - 1);
@@ -341,7 +330,7 @@ int StartServer(server_properties props) {
 		printf("\tConnected to %s.\a\n\n", inet_ntoa(clientAddr.sin_addr));
 
 		printf("\tInteracting with client:\n");
-		InteractClient(clientSock);
+		InteractClient(clientSock, props);
 		printf("\tEnded interaction.\n\n");
 
 		printf("\tClosing connection...\n");
@@ -354,7 +343,7 @@ int StartServer(server_properties props) {
 }
 
 
-server_properties RequestProperties() {
+server_properties PropertiesInput() {
 	server_properties props = {};
 
 	char ipInput[100] = "";
@@ -371,7 +360,6 @@ server_properties RequestProperties() {
 		printf("Enter server IP address (IPv4). To set automatically type \"auto\": ");
 		scanf("%99s", ipInput);
 	}
-
 	if (ipInput[0] == '-') {
 		printf("\n");
 		return props;
@@ -381,13 +369,25 @@ server_properties RequestProperties() {
 	printf("Enter port: ");
 	scanf("%d", &props.port);
 
+	printf("Enter site root folder (relative to this exe file): ");
+	scanf("%9999s", props.siteRootFolder);
+	if(props.siteRootFolder[9998] != '\0') {
+		fprintf(stderr, "(ERROR) Site root folder input overflow\n");
+	}
+
+	printf("Enter home page file (relative to site root folder): ");
+	scanf("%9999s", props.homePage);
+	if (props.homePage[9998] != '\0') {
+		fprintf(stderr, "(ERROR) Home page file input overflow\n");
+	}
+
 	printf("\n");
 	return props;
 }
 
 
 int main() {
-	server_properties props = RequestProperties();
+	server_properties props = PropertiesInput();
 
 	int err = 0;
 	while (1) {

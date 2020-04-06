@@ -21,6 +21,9 @@
   <ItemGroup>
     <ClCompile Include="Web_server.cpp" />
   </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="Content_types.h" />
+  </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>16.0</VCProjectVersion>
     <ProjectGuid>{33d2f928-9274-4b16-97a4-c45d7ec0d1a1}</ProjectGuid>
