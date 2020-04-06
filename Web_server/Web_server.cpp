@@ -223,7 +223,7 @@ int CreateSendBuf(char* fSendName, char* buf, int bufLen) {
 	FILE* fSend = fopen(fSendName, "rb");
 	if (fSend == NULL) {
 		headLen = sprintf(buf, "HTTP/1.1 404 Not Found");
-		fprintf(stderr, "(WARNING) Open %s file error: %d (%s)\n", fSendName, errno, strerror(errno));
+		fprintf(stderr, "(WARNING) %s file open error: %d (%s)\n", fSendName, errno, strerror(errno));
 		return headLen;
 	}
 	else {
