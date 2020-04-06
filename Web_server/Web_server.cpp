@@ -1,6 +1,4 @@
-﻿#pragma comment(linker, "/STACK:1100000000")
-
-#include <stdio.h>
+﻿#include <stdio.h>
 #include <stdlib.h>
 #include <assert.h>
 #include "Content_types.h"
@@ -21,6 +19,20 @@ struct server_properties {
 	char siteRootFolder[10000] = "Site-Root";
 	char homePage[10000] = "index.html";
 };
+
+
+long long FileSize(FILE* file) {
+	assert(file != NULL);
+
+	long long backupPos = ftell(file);
+
+	fseek(file, 0, SEEK_END);
+	long long res = ftell(file);
+	fseek(file, backupPos, SEEK_SET);
+
+	return res;
+}
+
 
 
 int Initialize() {
@@ -201,41 +213,39 @@ int CreateSendBuf(char* fSendName, char* buf, int bufLen) {
 	assert(buf != NULL);
 	assert(bufLen > 0);
 
-	const unsigned int fBufMaxSize = 500 * 1024 * 1024;
-
 	char headBuf[10000] = "";
 	int headLen = 0;
 
 	FILE* fSend = fopen(fSendName, "rb");
 	if (fSend == NULL) {
-		headLen = sprintf(headBuf, "HTTP/1.1 404 Not Found");
+		headLen = sprintf(buf, "HTTP/1.1 404 Not Found");
 		fprintf(stderr, "(WARNING) Open %s file error: %d (%s)\n", fSendName, errno, strerror(errno));
+		return headLen;
 	}
 	else {
 		char contType[100] = "";
 		if (DetContType(fSendName, contType) == 1) {
 			fprintf(stderr, "(ERROR) Didn't determine content type of file %s\n", fSendName);
+
+			fclose(fSend);
 			return -1;
 		}
 
 		headLen = sprintf(headBuf, "HTTP/1.1 200 OK\r\nContent-type: %s", contType);
+
+		long long fBufLen = FileSize(fSend);
+		if (headLen + fBufLen + 4 >= bufLen) {
+			fprintf(stderr, "(ERROR) Buffer length too small: header length: %d, "
+				"file length: %d, buffer length: %d\n", headLen, fBufLen, bufLen);
+			fclose(fSend);
+			return -1;
+		}
+		sprintf(buf, "%s\r\n\r\n", headBuf);
+		fread(&buf[headLen + 4], sizeof(char), bufLen - 4, fSend);
+
+		fclose(fSend);
+		return headLen + fBufLen + 4;
 	}
-
-	char fBuf[fBufMaxSize] = "";
-	int fBufLen = fread(fBuf, sizeof(char), fBufMaxSize, fSend);
-	assert(fBufLen < fBufMaxSize);
-	fclose(fSend);
-
-	if (headLen + fBufLen + 4 >= bufLen) {
-		fprintf(stderr, "(ERROR) Buffer length too small: header length: %d, "
-			    "file length: %d, buffer length: %d\n", headLen, fBufLen, bufLen);
-		return -1;
-	}
-
-	sprintf(buf, "%s\r\n\r\n", headBuf);
-	memcpy(&buf[headLen  + 4], fBuf, fBufLen);
-
-	return headLen + 4 + fBufLen;
 }
 
 int InteractClient(SOCKET clientSock, server_properties props) {
@@ -245,7 +255,7 @@ int InteractClient(SOCKET clientSock, server_properties props) {
 	const char const siteFolder[] = "Site_data";
 	const char const mainPage[] = "Page.html";
 
-	char buf[500 * 1024 * 1024] = "";
+	char buf[1500 * 1024 * 1024] = "";
 	printf("\t\tReceiving data...\n");
 	int bufLen = ReceiveData(clientSock, buf, sizeof(buf) - 1);
 	if (bufLen <= 0) {
