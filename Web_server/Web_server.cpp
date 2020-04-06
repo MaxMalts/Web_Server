@@ -18,6 +18,8 @@ struct server_properties {
 
 	char siteRootFolder[10000] = "Site-Root";
 	char homePage[10000] = "index.html";
+
+	int soundConnection = 0;
 };
 
 
@@ -223,7 +225,7 @@ int CreateSendBuf(char* fSendName, char* buf, int bufLen) {
 	FILE* fSend = fopen(fSendName, "rb");
 	if (fSend == NULL) {
 		headLen = sprintf(buf, "HTTP/1.1 404 Not Found");
-		fprintf(stderr, "(WARNING) %s file open error: %d (%s)\n", fSendName, errno, strerror(errno));
+		fprintf(stderr, "(WARNING) \"%s\" file open error: %d (%s)\n", fSendName, errno, strerror(errno));
 		return headLen;
 	}
 	else {
@@ -339,7 +341,10 @@ int StartServer(server_properties props) {
 			closesocket(listenSock);
 			return 1;
 		}
-		printf("\tConnected to %s.\a\n\n", inet_ntoa(clientAddr.sin_addr));
+		printf("\tConnected to %s\n\n", inet_ntoa(clientAddr.sin_addr));
+		if (props.soundConnection) {
+			printf("\a");
+		}
 
 		printf("\tInteracting with client:\n");
 		InteractClient(clientSock, props);
@@ -380,17 +385,36 @@ server_properties PropertiesInput() {
 	strcpy(props.ipAddr, ipInput);
 	printf("Enter port: ");
 	scanf("%d", &props.port);
+	fseek(stdin, 0, SEEK_END);
 
-	printf("Enter site root folder (relative to this exe file): ");
+	printf("Enter site root folder: ");
 	scanf("%9999s", props.siteRootFolder);
 	if(props.siteRootFolder[9998] != '\0') {
 		fprintf(stderr, "(ERROR) Site root folder input overflow\n");
 	}
+	fseek(stdin, 0, SEEK_END);
 
 	printf("Enter home page file (relative to site root folder): ");
 	scanf("%9999s", props.homePage);
 	if (props.homePage[9998] != '\0') {
 		fprintf(stderr, "(ERROR) Home page file input overflow\n");
+	}
+	fseek(stdin, 0, SEEK_END);
+
+	char alert = 0;
+	while (alert != 'y' && alert != 'n') {
+		printf("Do you want server to alert you with sound when someone connects? [y/n]: ");
+		scanf("%c", &alert);
+		alert = tolower(alert);
+
+		if (alert == 'y') {
+			props.soundConnection = 1;
+		} else if (alert == 'n') {
+			props.soundConnection = 0;
+		} else {
+			printf("Enter \"y\" or \"n\"\n");
+		}
+		fseek(stdin, 0, SEEK_END);
 	}
 
 	printf("\n");
