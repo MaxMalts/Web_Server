@@ -12,6 +12,13 @@
 #define DEBUG_CODE(code) 
 #endif
 
+
+struct server_properties {
+	char ipAddr[100] = "auto";
+	int port = 80;
+};
+
+
 int Initialize() {
 	WSADATA wsConf;
 	int err = WSAStartup(MAKEWORD(1, 1), &wsConf);
@@ -25,17 +32,17 @@ int Initialize() {
 
 hostent* GetCurHost() {
 	char hostName[100] = "";
-if (gethostname(hostName, 100) == SOCKET_ERROR) {
-	fprintf(stderr, "(ERROR) gethostname() error: %d\n", WSAGetLastError());
-	return NULL;
-}
-hostent* host = gethostbyname(hostName);
-if (host == NULL) {
-	fprintf(stderr, "(ERROR) gethostbyname() error: %d\n", WSAGetLastError());
-	return NULL;
-}
+	if (gethostname(hostName, 100) == SOCKET_ERROR) {
+		fprintf(stderr, "(ERROR) gethostname() error: %d\n", WSAGetLastError());
+		return NULL;
+	}
+	hostent* host = gethostbyname(hostName);
+	if (host == NULL) {
+		fprintf(stderr, "(ERROR) gethostbyname() error: %d\n", WSAGetLastError());
+		return NULL;
+	}
 
-return host;
+	return host;
 }
 
 sockaddr_in GetListenAddr_in(hostent* host, int port) {
@@ -44,6 +51,7 @@ sockaddr_in GetListenAddr_in(hostent* host, int port) {
 	sockaddr_in listenAddr = {};
 	listenAddr.sin_family = AF_INET;
 	memcpy(&listenAddr.sin_addr, host->h_addr, host->h_length);
+	//listenAddr.sin_addr.s_addr = inet_addr("127.0.0.1");
 	listenAddr.sin_port = htons(port);
 
 	return listenAddr;
@@ -70,13 +78,25 @@ SOCKET InitializeListenSock(sockaddr_in listenAddr) {
 	return listenSock;
 }
 
-SOCKET GetListenSock() {
-	hostent* host = GetCurHost();
-	if (host == NULL) {
-		return INVALID_SOCKET;
+SOCKET GetListenSock(server_properties props) {
+	hostent* host = NULL;
+
+	if (strcmp(props.ipAddr, "auto") == 0) {
+		host = GetCurHost();
+		if (host == NULL) {
+			return INVALID_SOCKET;
+		}
+	}
+	else {
+		host = gethostbyaddr(props.ipAddr, 4, AF_INET);
+		if (host == NULL) {
+			fprintf(stderr, "(ERROR) gethostbyaddr() error: %d\n", WSAGetLastError());
+			return INVALID_SOCKET;
+		}
 	}
 
-	sockaddr_in listenAddr = GetListenAddr_in(host, 80);
+	sockaddr_in listenAddr = GetListenAddr_in(host, props.port);
+	DEBUG_CODE(printf("Server IP: %s; port: %d\n", inet_ntoa(listenAddr.sin_addr), ntohs(listenAddr.sin_port)));
 
 	SOCKET listenSock = InitializeListenSock(listenAddr);
 
@@ -294,16 +314,16 @@ int EndConnection(SOCKET clientSock) {
 	}
 }
 
-int StartServer() {
+int StartServer(server_properties props) {
 	printf("Initializing...\n");
 	int err = Initialize();
 	if (err != 0) {
 		return 1;
 	}
-	printf("Initialized.\n\n");
+	(printf("Initialized.\n\n"));
 
 	printf("Creating listening socket...\n");
-	SOCKET listenSock = GetListenSock();
+	SOCKET listenSock = GetListenSock(props);
 	if (listenSock == INVALID_SOCKET) {
 		closesocket(listenSock);
 		return 1;
@@ -318,7 +338,7 @@ int StartServer() {
 			closesocket(listenSock);
 			return 1;
 		}
-		printf("\tConnected to %s.\n\n", inet_ntoa(clientAddr.sin_addr));
+		printf("\tConnected to %s.\a\n\n", inet_ntoa(clientAddr.sin_addr));
 
 		printf("\tInteracting with client:\n");
 		InteractClient(clientSock);
@@ -333,11 +353,45 @@ int StartServer() {
 	}
 }
 
+
+server_properties RequestProperties() {
+	server_properties props = {};
+
+	char ipInput[100] = "";
+	printf("Please, configure server properties. To use all default settings, type \"-\":\n");
+
+	printf("Enter server IP address (IPv4). To set automatically type \"auto\": ");
+	scanf("%99s", ipInput);
+	while (ipInput[98] != '\0') {
+		printf("Invalid input\n");
+
+		fseek(stdin, 0, SEEK_END);
+		ipInput[98] = '\0';
+
+		printf("Enter server IP address (IPv4). To set automatically type \"auto\": ");
+		scanf("%99s", ipInput);
+	}
+
+	if (ipInput[0] == '-') {
+		printf("\n");
+		return props;
+	}
+
+	strcpy(props.ipAddr, ipInput);
+	printf("Enter port: ");
+	scanf("%d", &props.port);
+
+	printf("\n");
+	return props;
+}
+
+
 int main() {
+	server_properties props = RequestProperties();
 
 	int err = 0;
 	while (1) {
-		err = StartServer();
+		err = StartServer(props);
 		if (err != 0) {
 			printf("Restarting...\n");
 		}
