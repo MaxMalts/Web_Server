@@ -192,8 +192,12 @@ int DetContType(char* fName, char* contType) {
 	assert(fName != NULL);
 	assert(contType != NULL);
 
-	int fNameLen = strlen(fName);
-	char* lastCh = &fName[fNameLen - 1];
+	char tFName[10000] = "";
+	strcpy(tFName, fName);
+	strlwr(tFName);
+
+	int fNameLen = strlen(tFName);
+	char* lastCh = &tFName[fNameLen - 1];
 	for (int i = 0; i < content_matches.size; ++i) {
 		int curExtensionSize = strlen(content_matches.contents[i].fExtension);
 
@@ -252,8 +256,6 @@ int InteractClient(SOCKET clientSock, server_properties props) {
 	assert(clientSock != INVALID_SOCKET);
 
 	const int fReqNameMaxSize = 10000;
-	const char const siteFolder[] = "Site_data";
-	const char const mainPage[] = "Page.html";
 
 	char buf[1500 * 1024 * 1024] = "";
 	printf("\t\tReceiving data...\n");
@@ -270,7 +272,7 @@ int InteractClient(SOCKET clientSock, server_properties props) {
 
 		char fReqName[fReqNameMaxSize] = "";
 		if (buf[5] == ' ') {
-			sprintf(fReqName, "%s/%s", props.siteRootFolder, mainPage);
+			sprintf(fReqName, "%s/%s", props.siteRootFolder, props.homePage);
 		}
 		else {
 			char* space = strchr(&buf[4], ' ');
