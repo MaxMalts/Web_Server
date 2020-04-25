@@ -63,7 +63,7 @@ hostent* GetCurHost() {
 	return host;
 }
 
-sockaddr_in GetListenAddr_in(hostent* host, int port) {
+sockaddr_in GetListenAddrFromHost(hostent* host, int port) {
 	assert(host != NULL);
 
 	sockaddr_in listenAddr = {};
@@ -97,23 +97,23 @@ SOCKET InitializeListenSock(sockaddr_in listenAddr) {
 }
 
 SOCKET GetListenSock(server_properties props) {
-	hostent* host = NULL;
+	sockaddr_in listenAddr = {};
 
 	if (strcmp(props.ipAddr, "auto") == 0) {
-		host = GetCurHost();
+		hostent* host = GetCurHost();
 		if (host == NULL) {
 			return INVALID_SOCKET;
 		}
+
+		listenAddr = GetListenAddrFromHost(host, props.port);
 	}
 	else {
-		host = gethostbyaddr(props.ipAddr, 4, AF_INET);
-		if (host == NULL) {
-			fprintf(stderr, "(ERROR) gethostbyaddr() error: %d\n", WSAGetLastError());
-			return INVALID_SOCKET;
-		}
+		listenAddr = {};
+		listenAddr.sin_family = AF_INET;
+		listenAddr.sin_addr.s_addr = inet_addr(props.ipAddr);
+		listenAddr.sin_port = htons(props.port);
 	}
 
-	sockaddr_in listenAddr = GetListenAddr_in(host, props.port);
 	DEBUG_CODE(printf("Server IP: %s; port: %d\n", inet_ntoa(listenAddr.sin_addr), ntohs(listenAddr.sin_port)));
 
 	SOCKET listenSock = InitializeListenSock(listenAddr);
@@ -311,7 +311,7 @@ int InteractClient(SOCKET clientSock, server_properties props) {
 		}
 
 		printf("\n\t\tSending data:\n");
-		DEBUG_CODE(fwrite(buf, sizeof(char), bufLen, stdout));
+		DEBUG_CODE(fwrite(buf, sizeof(char), bufLen, stdout); printf("\n"););
 		if (SendData(clientSock, buf, bufLen) == 1) {
 			return 1;
 		}
