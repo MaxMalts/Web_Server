@@ -114,7 +114,7 @@ SOCKET GetListenSock(server_properties props) {
 		listenAddr.sin_port = htons(props.port);
 	}
 
-	DEBUG_CODE(printf("Server IP: %s; port: %d\n", inet_ntoa(listenAddr.sin_addr), ntohs(listenAddr.sin_port)));
+	printf("Server IP: %s; port: %d\n", inet_ntoa(listenAddr.sin_addr), ntohs(listenAddr.sin_port));
 
 	SOCKET listenSock = InitializeListenSock(listenAddr);
 
@@ -197,7 +197,7 @@ int SendData(SOCKET clientSock, char* buf, int len) {
 
 		++i;
 		if (i % 300 == 0) {
-			printf("%.1f%% sent\n", (float)i / NChunks * 100);
+			printf("\t\t\t%.1f%% sent\n", (float)i / NChunks * 100);
 		}
 	}
 	if (send(clientSock, cursor, len, 0) == SOCKET_ERROR) {
@@ -279,7 +279,7 @@ int InteractClient(SOCKET clientSock, server_properties props) {
 
 	const int fReqNameMaxSize = 10000;
 
-	char buf[1500 * 1024 * 1024] = "";
+	char buf[1500 * 1024 * 1024];
 	printf("\t\tReceiving data...\n");
 	int bufLen = ReceiveData(clientSock, buf, sizeof(buf) - 1);
 	if (bufLen <= 0) {
