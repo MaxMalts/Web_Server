@@ -204,7 +204,7 @@ int SendData(SOCKET clientSock, char* buf, int len) {
 		fprintf(stderr, "(ERROR) Error while sending attemp: %d\n", WSAGetLastError());
 		return 1;
 	}
-	printf("100.0%% sent\n");
+	printf("\t\t\t100.0%% sent\n");
 
 
 	return 0;
@@ -315,7 +315,7 @@ int InteractClient(SOCKET clientSock, server_properties props) {
 		if (SendData(clientSock, buf, bufLen) == 1) {
 			return 1;
 		}
-		printf("\n\t\tData sent.\n");
+		printf("\t\tData sent.\n");
 	}
 	else {
 		fprintf(stderr, "(ERROR) Didn't receive GET method\n");
@@ -343,7 +343,7 @@ int StartServer(server_properties props) {
 	if (err != 0) {
 		return 1;
 	}
-	(printf("Initialized.\n\n"));
+	printf("Initialized.\n\n");
 
 	printf("Creating listening socket...\n");
 	SOCKET listenSock = GetListenSock(props);
