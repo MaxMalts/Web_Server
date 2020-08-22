@@ -249,16 +249,16 @@ int CreateSendBuf(char* fSendName, char* buf, int bufLen) {
 		return headLen;
 	}
 	else {
+		long long fBufLen = FileSize(fSend);
+
 		char contType[100] = "";
 		if (DetContType(fSendName, contType) == 1) {
-			fprintf(stderr, "(ERROR) Didn't determine content type of file %s\n", fSendName);
-
-			fclose(fSend);
-			return -1;
+			fprintf(stderr, "(WARNING) Didn't determine content type of file %s\n", fSendName);
+			headLen = sprintf(headBuf, "HTTP/1.0 200 OK\r\nContent-length: %d", fBufLen);
 		}
-
-		long long fBufLen = FileSize(fSend);
-		headLen = sprintf(headBuf, "HTTP/1.1 200 OK\r\nContent-type: %s\r\nContent-length: %d", contType, fBufLen);
+		else {
+			headLen = sprintf(headBuf, "HTTP/1.0 200 OK\r\nContent-type: %s\r\nContent-length: %d", contType, fBufLen);
+		}
 
 		if (headLen + fBufLen + 4 >= bufLen) {
 			fprintf(stderr, "(ERROR) Buffer length too small: header length: %d, "
