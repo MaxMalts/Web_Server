@@ -41,7 +41,7 @@ int Initialize() {
 	WSADATA wsConf;
 	int err = WSAStartup(MAKEWORD(1, 1), &wsConf);
 	if (err != NO_ERROR) {
-		fprintf(stderr, "(ERROR) WSAStartup() error: %d\n", err);
+		fprintf(stderr, "\n(ERROR) WSAStartup() error: %d\n", err);
 		return 1;
 	}
 
@@ -51,12 +51,12 @@ int Initialize() {
 hostent* GetCurHost() {
 	char hostName[100] = "";
 	if (gethostname(hostName, 100) == SOCKET_ERROR) {
-		fprintf(stderr, "(ERROR) gethostname() error: %d\n", WSAGetLastError());
+		fprintf(stderr, "\n(ERROR) gethostname() error: %d\n", WSAGetLastError());
 		return NULL;
 	}
 	hostent* host = gethostbyname(hostName);
 	if (host == NULL) {
-		fprintf(stderr, "(ERROR) gethostbyname() error: %d\n", WSAGetLastError());
+		fprintf(stderr, "\n(ERROR) gethostbyname() error: %d\n", WSAGetLastError());
 		return NULL;
 	}
 
@@ -79,17 +79,17 @@ SOCKET InitializeListenSock(sockaddr_in listenAddr) {
 	SOCKET listenSock = socket(AF_INET, SOCK_STREAM, 0);
 
 	if (listenSock == INVALID_SOCKET) {
-		fprintf(stderr, "(ERROR) Error when creating the listen socket: %d\n", WSAGetLastError());
+		fprintf(stderr, "\n(ERROR) Error when creating the listen socket: %d\n", WSAGetLastError());
 		return INVALID_SOCKET;
 	}
 
 	if (bind(listenSock, (sockaddr*)& listenAddr, sizeof(listenAddr)) == SOCKET_ERROR) {
-		fprintf(stderr, "(ERROR) Bind listen socket error: %d\n", WSAGetLastError());
+		fprintf(stderr, "\n(ERROR) Bind listen socket error: %d\n", WSAGetLastError());
 		return INVALID_SOCKET;
 	}
 
 	if (listen(listenSock, 1) == SOCKET_ERROR) {
-		fprintf(stderr, "(ERROR) Listen socket connection error: %d\n", WSAGetLastError());
+		fprintf(stderr, "\n(ERROR) Listen socket connection error: %d\n", WSAGetLastError());
 		return INVALID_SOCKET;
 	}
 
@@ -134,16 +134,16 @@ SOCKET AcceptConnection(SOCKET listenSock, sockaddr* clientAddr = NULL, int* add
 		resSock = accept(listenSock, clientAddr, addrLen);
 		if (resSock == INVALID_SOCKET) {
 			if (WSAGetLastError() == WSAETIMEDOUT) {
-				fprintf(stderr, "(ERROR) Accepting connection timed out. Trying to reconnect...\n");
+				fprintf(stderr, "\n(ERROR) Accepting connection timed out. Trying to reconnect...\n");
 				continue;
 			}
-			fprintf(stderr, "(ERROR) Accepting connection error: %d\n", WSAGetLastError());
+			fprintf(stderr, "\n(ERROR) Accepting connection error: %d\n", WSAGetLastError());
 			return INVALID_SOCKET;
 		}
 
 		DWORD timeout = 3 * 1000;
 		if (setsockopt(resSock, SOL_SOCKET, SO_RCVTIMEO, (char*)& timeout, sizeof(timeout)) == SOCKET_ERROR) {
-			fprintf(stderr, "(ERROR) Socket timeout configuration error: %d\n", WSAGetLastError());
+			fprintf(stderr, "\n(ERROR) Socket timeout configuration error: %d\n", WSAGetLastError());
 			return INVALID_SOCKET;
 		}
 		break;
@@ -160,16 +160,16 @@ int ReceiveData(SOCKET clientSock, char* buf, int len) {
 	int recvLen = recv(clientSock, buf, len, 0);
 	assert(recvLen < len);
 	if (recvLen == 0) {
-		fprintf(stderr, "(ERROR) Connection gracefully closed (while recv attemp)\n");
+		fprintf(stderr, "\n(ERROR) Connection gracefully closed (while recv attemp)\n");
 		return 0;
 	}
 	else if (recvLen == SOCKET_ERROR) {
 		if (WSAGetLastError() == WSAETIMEDOUT) {
-			fprintf(stderr, "(ERROR) Receive timed out\n");
+			fprintf(stderr, "\n(ERROR) Receive timed out\n");
 			return 0;
 		}
 		else {
-			fprintf(stderr, "(ERROR) Error while receiving attemp: %d\n", WSAGetLastError());
+			fprintf(stderr, "\n(ERROR) Error while receiving attemp: %d\n", WSAGetLastError());
 			return -1;
 		}
 	}
@@ -189,7 +189,7 @@ int SendData(SOCKET clientSock, char* buf, int len) {
 	char* cursor = buf;
 	while (len >= chunkSize) {
 		if (send(clientSock, cursor, chunkSize, 0) == SOCKET_ERROR) {
-			fprintf(stderr, "(ERROR) Error while sending attemp: %d\n", WSAGetLastError());
+			fprintf(stderr, "\n(ERROR) Error while sending attemp: %d\n", WSAGetLastError());
 			return 1;
 		}
 		len -= chunkSize;
@@ -201,7 +201,7 @@ int SendData(SOCKET clientSock, char* buf, int len) {
 		}
 	}
 	if (send(clientSock, cursor, len, 0) == SOCKET_ERROR) {
-		fprintf(stderr, "(ERROR) Error while sending attemp: %d\n", WSAGetLastError());
+		fprintf(stderr, "\n(ERROR) Error while sending attemp: %d\n", WSAGetLastError());
 		return 1;
 	}
 	printf("\t\t\t100.0%% sent\n");
@@ -245,7 +245,7 @@ int CreateSendBuf(char* fSendName, char* buf, int bufLen) {
 	FILE* fSend = fopen(fSendName, "rb");
 	if (fSend == NULL) {
 		headLen = sprintf(buf, "HTTP/1.1 404 Not Found");
-		fprintf(stderr, "(WARNING) \"%s\" file open error: %d (%s)\n", fSendName, errno, strerror(errno));
+		fprintf(stderr, "\n(WARNING) \"%s\" file open error: %d (%s)\n", fSendName, errno, strerror(errno));
 		return headLen;
 	}
 	else {
@@ -253,7 +253,7 @@ int CreateSendBuf(char* fSendName, char* buf, int bufLen) {
 
 		char contType[100] = "";
 		if (DetContType(fSendName, contType) == 1) {
-			fprintf(stderr, "(WARNING) Didn't determine content type of file %s\n", fSendName);
+			fprintf(stderr, "\n(WARNING) Didn't determine content type of file %s\n", fSendName);
 			headLen = sprintf(headBuf, "HTTP/1.0 200 OK\r\nContent-length: %d", fBufLen);
 		}
 		else {
@@ -261,7 +261,7 @@ int CreateSendBuf(char* fSendName, char* buf, int bufLen) {
 		}
 
 		if (headLen + fBufLen + 4 >= bufLen) {
-			fprintf(stderr, "(ERROR) Buffer length too small: header length: %d, "
+			fprintf(stderr, "\n(ERROR) Buffer length too small: header length: %d, "
 				"file length: %d, buffer length: %d\n", headLen, fBufLen, bufLen);
 			fclose(fSend);
 			return -1;
@@ -318,7 +318,7 @@ int InteractClient(SOCKET clientSock, server_properties props) {
 		printf("\t\tData sent.\n");
 	}
 	else {
-		fprintf(stderr, "(ERROR) Didn't receive GET method\n");
+		fprintf(stderr, "\n(ERROR) Didn't receive GET method\n");
 	}
 
 	return 0;
@@ -328,11 +328,11 @@ int EndConnection(SOCKET clientSock) {
 	assert(clientSock != INVALID_SOCKET);
 
 	if (shutdown(clientSock, SD_BOTH) == SOCKET_ERROR) {
-		fprintf(stderr, "(ERROR) shutdown() error: %d", WSAGetLastError());
+		fprintf(stderr, "\n(ERROR) shutdown() error: %d", WSAGetLastError());
 		return SOCKET_ERROR;
 	}
 	if (closesocket(clientSock) == SOCKET_ERROR) {
-		fprintf(stderr, "(ERROR) closesocket() error: %d", WSAGetLastError());
+		fprintf(stderr, "\n(ERROR) closesocket() error: %d", WSAGetLastError());
 		return SOCKET_ERROR;
 	}
 }
@@ -410,14 +410,14 @@ server_properties PropertiesInput() {
 	printf("Enter site root folder: ");
 	scanf("%9999s", props.siteRootFolder);
 	if(props.siteRootFolder[9998] != '\0') {
-		fprintf(stderr, "(ERROR) Site root folder input overflow\n");
+		fprintf(stderr, "\n(ERROR) Site root folder input overflow\n");
 	}
 	fseek(stdin, 0, SEEK_END);
 
 	printf("Enter home page file (relative to site root folder): ");
 	scanf("%9999s", props.homePage);
 	if (props.homePage[9998] != '\0') {
-		fprintf(stderr, "(ERROR) Home page file input overflow\n");
+		fprintf(stderr, "\n(ERROR) Home page file input overflow\n");
 	}
 	fseek(stdin, 0, SEEK_END);
 
