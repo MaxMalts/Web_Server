@@ -254,10 +254,10 @@ int CreateSendBuf(char* fSendName, char* buf, int bufLen) {
 		char contType[100] = "";
 		if (DetContType(fSendName, contType) == 1) {
 			fprintf(stderr, "\n(WARNING) Didn't determine content type of file %s\n", fSendName);
-			headLen = sprintf(headBuf, "HTTP/1.0 200 OK\r\nContent-length: %d", fBufLen);
+			headLen = sprintf(headBuf, "HTTP/1.0 200 OK\r\nAccept-Ranges: none\r\nContent-length: %d", fBufLen);
 		}
 		else {
-			headLen = sprintf(headBuf, "HTTP/1.0 200 OK\r\nContent-type: %s\r\nContent-length: %d", contType, fBufLen);
+			headLen = sprintf(headBuf, "HTTP/1.0 200 OK\r\nAccept-Ranges: none\r\nContent-type: %s\r\nContent-length: %d", contType, fBufLen);
 		}
 
 		if (headLen + fBufLen + 4 >= bufLen) {
